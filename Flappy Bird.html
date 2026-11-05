@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flappy Bird</title>
+<style>
+:root{--bg:#cfeefc;--ink:#2b3a42;--card:#fffbe8;color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14202e;--ink:#f1f5f9;--card:#26344a}}
+:root[data-theme="dark"]{--bg:#14202e;--ink:#f1f5f9;--card:#26344a}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS",Verdana,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+canvas{max-width:100%;max-height:78%;aspect-ratio:2/3;border-radius:14px;border:4px solid var(--ink);background:#70c5ce;cursor:pointer}
+p{margin:0;font-size:15px;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="c" width="400" height="600" tabindex="0" aria-label="Trò chơi Flappy Bird"></canvas>
+<p>Chạm, nhấp chuột hoặc nhấn Space để vỗ cánh</p>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d');
+const W=400,H=600,G=0.45,JUMP=-7.6,GAP=150,PW=60,GROUND=70;
+let best=0;try{best=+localStorage.getItem('fb_best')||0}catch(e){}
+let bird,pipes,score,state,frame,tick=0;
+let scene=0,sceneT=0,unlocked=false;try{unlocked=localStorage.getItem('fb_end')==='1'}catch(e){}
+let LINES=[],endId=0,loveSeen=false;try{loveSeen=localStorage.getItem('fb_love')==='1'}catch(e){}
+const LINESBAD=['Cú va chạm quá mạnh. Mọi thứ chợt lặng đi.','Bạn đã từng bay cùng một cánh chim màu hồng dưới hoàng hôn.','Chỉ cách một cột nữa thôi, bạn đã gặp lại người ấy. Nhưng lần này bạn đã ngã xuống.','Có những cuộc gặp gỡ chỉ đến một lần, và bạn đã lỡ mất.','Ending xấu: Lỡ hẹn'];
+const LINES15=['Điểm thứ 15. Gió đổi chiều, nhẹ như một lời thì thầm.','Một cánh chim nhỏ màu hồng bay lướt qua bên cạnh bạn.','Hai chú chim không nói gì, chỉ bay song song dưới hoàng hôn.','Rồi bạn hiểu: có những chặng đường chỉ đẹp khi có người cùng bay.','Ending ẩn: Hoàng hôn của đôi ta'];
+const LINES36=['Điểm thứ 36. Những ống xanh bỗng tan biến như khói.','Bầu trời mở ra. Phía trên đám mây, một ánh sáng nhỏ đang chờ.','Đó là chiếc tổ cũ. Trong tổ, chú chim con bị lạc bấy lâu đang gọi tên bạn.','Hóa ra bạn chưa bao giờ bay để né ống. Bạn bay để về nhà.','Ending ẩn: Bầu trời tự do'];
+function reset(){bird={x:100,y:250,v:0};pipes=[];score=0;frame=0;state='ready'}
+function flap(){
+  if(state==='ending'){if(sceneT>40){scene++;sceneT=0;if(scene>=LINES.length){if(endId===15){state='play';pipes=[];frame=0;bird.y=250;bird.v=0;scene=0;endId=0}else reset()}}return}
+  if(state==='ready')state='play';
+  if(state==='play')bird.v=JUMP;
+  else if(state==='over'&&tick>25)reset();
+}
+['mousedown','touchstart'].forEach(e=>cv.addEventListener(e,ev=>{ev.preventDefault();flap()},{passive:false}));
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flap()}});
+function die(){
+  if(state!=='play')return;
+  state='over';tick=0;
+  if(loveSeen&&score===14){state='ending';endId=-1;LINES=LINESBAD;scene=0;sceneT=0}
+  if(score>best){best=score;try{localStorage.setItem('fb_best',best)}catch(e){}}
+}
+function update(){
+  tick++;frame++;
+  if(state==='ready'){bird.y=250+Math.sin(frame/10)*8;return}
+  if(state==='ending'){sceneT++;return}
+  if(state!=='play')return;
+  bird.v+=G;bird.y+=bird.v;
+  if(frame%90===1){pipes.push({x:W,top:60+Math.random()*(H-GROUND-GAP-120),scored:false})}
+  pipes.forEach(p=>{
+    p.x-=2.8;
+    if(!p.scored&&p.x+PW<bird.x){p.scored=true;score++;if(score===15||score===36){state='ending';endId=score;LINES=score===15?LINES15:LINES36;scene=0;sceneT=0;unlocked=true;if(score===15){loveSeen=true;try{localStorage.setItem('fb_love','1')}catch(e){}}try{localStorage.setItem('fb_end','1')}catch(e){}}}
+    if(bird.x+14>p.x&&bird.x-14<p.x+PW&&(bird.y-12<p.top||bird.y+12>p.top+GAP))die();
+  });
+  pipes=pipes.filter(p=>p.x>-PW);
+  if(bird.y+12>H-GROUND||bird.y-12<0)die();
+}
+function pipe(p){
+  x.fillStyle='#5cb85c';x.strokeStyle='#2d6a2d';x.lineWidth=3;
+  const b=p.top+GAP;
+  x.fillRect(p.x,0,PW,p.top);x.strokeRect(p.x,0,PW,p.top);
+  x.fillRect(p.x-4,p.top-24,PW+8,24);x.strokeRect(p.x-4,p.top-24,PW+8,24);
+  x.fillRect(p.x,b,PW,H-GROUND-b);x.strokeRect(p.x,b,PW,H-GROUND-b);
+  x.fillRect(p.x-4,b,PW+8,24);x.strokeRect(p.x-4,b,PW+8,24);
+}
+function draw(){
+  x.fillStyle='#70c5ce';x.fillRect(0,0,W,H);
+  x.fillStyle='#fff';
+  [[60,90],[250,60],[330,150]].forEach(([a,b])=>{x.beginPath();x.arc(a,b,22,0,7);x.arc(a+24,b+6,18,0,7);x.arc(a-22,b+8,16,0,7);x.fill()});
+  pipes.forEach(pipe);
+  x.fillStyle='#ded895';x.fillRect(0,H-GROUND,W,GROUND);
+  x.fillStyle='#73bf2e';x.fillRect(0,H-GROUND,W,14);
+  x.fillStyle='#c9bd6a';
+  for(let i=0;i<W+30;i+=30)x.fillRect(((i-frame*2.8)%(W+30)+W+30)%(W+30)-30,H-GROUND+28,16,6);
+  x.save();x.translate(bird.x,bird.y);
+  x.rotate(Math.max(-0.5,Math.min(1.2,bird.v/10)));
+  x.fillStyle='#f7d02c';x.strokeStyle='#5a3d00';x.lineWidth=2.5;
+  x.beginPath();x.ellipse(0,0,17,13,0,0,7);x.fill();x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(7,-5,5,0,7);x.fill();x.stroke();
+  x.fillStyle='#000';x.beginPath();x.arc(9,-5,2,0,7);x.fill();
+  x.fillStyle='#f06a30';x.beginPath();x.moveTo(13,0);x.lineTo(25,4);x.lineTo(13,8);x.closePath();x.fill();x.stroke();
+  x.fillStyle='#fff3b0';x.beginPath();x.ellipse(-6,3+Math.sin(frame/3)*3,8,5,0,0,7);x.fill();x.stroke();
+  x.restore();
+  x.textAlign='center';x.lineJoin='round';
+  x.font='bold 48px "Trebuchet MS",sans-serif';x.lineWidth=6;x.strokeStyle='#2b3a42';x.fillStyle='#fff';
+  if(state!=='over'){x.strokeText(score,W/2,80);x.fillText(score,W/2,80)}
+  if(state==='ready'){
+    x.font='bold 30px "Trebuchet MS",sans-serif';
+    x.strokeText('Sẵn sàng?',W/2,200);x.fillText('Sẵn sàng?',W/2,200);
+  }
+  if(state==='over'){
+    x.fillStyle='#fffbe8';x.strokeStyle='#2b3a42';x.lineWidth=4;
+    x.fillRect(60,190,280,210);x.strokeRect(60,190,280,210);
+    x.fillStyle='#2b3a42';x.font='bold 30px "Trebuchet MS",sans-serif';
+    x.fillText('Thua rồi!',W/2,235);
+    x.font='20px "Trebuchet MS",sans-serif';
+    x.fillText('Điểm: '+score,W/2,285);
+    x.fillText('Cao nhất: '+best,W/2,320);
+    x.font='bold 16px "Trebuchet MS",sans-serif';
+    x.fillText('Chạm để chơi lại',W/2,370);
+  }
+}
+function mini(px,py,s,r,tail){
+  x.save();x.translate(px,py);x.scale(s,s);x.rotate(r);
+  x.fillStyle='#f7d02c';x.strokeStyle='#5a3d00';x.lineWidth=2.5;
+  x.beginPath();x.ellipse(0,0,17,13,0,0,7);x.fill();x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(7,-5,5,0,7);x.fill();x.stroke();
+  x.fillStyle='#000';x.beginPath();x.arc(9,-5,2,0,7);x.fill();
+  x.fillStyle='#f06a30';x.beginPath();x.moveTo(13,0);x.lineTo(25,4);x.lineTo(13,8);x.closePath();x.fill();x.stroke();
+  x.fillStyle='#fff3b0';x.beginPath();x.ellipse(-6,3+Math.sin(frame/3)*tail,8,5,0,0,7);x.fill();x.stroke();
+  x.restore();
+}
+function wrap(t,cx,y,mw,lh){
+  let line='';
+  t.split(' ').forEach(w=>{
+    const test=line+w+' ';
+    if(x.measureText(test).width>mw&&line){x.fillText(line,cx,y);line=w+' ';y+=lh}else line=test;
+  });
+  x.fillText(line,cx,y);
+}
+function cbird(px,py,s,r,col){
+  x.save();x.translate(px,py);x.scale(s,s);x.rotate(r);
+  x.fillStyle=col;x.strokeStyle='#5a3d00';x.lineWidth=2.5;
+  x.beginPath();x.ellipse(0,0,17,13,0,0,7);x.fill();x.stroke();
+  x.fillStyle='#fff';x.beginPath();x.arc(7,-5,5,0,7);x.fill();x.stroke();
+  x.fillStyle='#000';x.beginPath();x.arc(9,-5,2,0,7);x.fill();
+  x.fillStyle='#f06a30';x.beginPath();x.moveTo(13,0);x.lineTo(25,4);x.lineTo(13,8);x.closePath();x.fill();x.stroke();
+  x.fillStyle='rgba(255,255,255,.6)';x.beginPath();x.ellipse(-6,3+Math.sin(frame/3)*3,8,5,0,0,7);x.fill();x.stroke();
+  x.restore();
+}
+function heart(hx,hy,s,a){
+  x.save();x.globalAlpha=a;x.translate(hx,hy);x.scale(s,s);x.fillStyle='#ff5a7a';
+  x.beginPath();x.moveTo(0,4);x.bezierCurveTo(-10,-6,-18,4,0,18);x.bezierCurveTo(18,4,10,-6,0,4);x.fill();x.restore();
+}
+function drawLove(){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#3b2a5a');g.addColorStop(0.5,'#e0698a');g.addColorStop(1,'#ffb36b');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.fillStyle='rgba(255,230,160,.9)';x.beginPath();x.arc(W/2,360,64,0,7);x.fill();
+  x.fillStyle='rgba(255,255,255,.35)';
+  [[70,430],[190,450],[300,425],[390,455]].forEach(([a,b])=>{x.beginPath();x.arc(a,b,40,0,7);x.arc(a+35,b+10,30,0,7);x.fill()});
+  const bob=Math.sin(frame/14)*8;
+  const ax=scene>=3?170:140;
+  cbird(ax,300+bob,1.1,0,'#f7d02c');
+  if(scene>=1){
+    const px=scene===1?W+40-Math.min(1,sceneT/60)*(W+40-250):(scene>=3?218:250);
+    cbird(px,300+bob,1.1,0,'#ff9fb8');
+  }
+  if(scene>=2){
+    for(let i=0;i<5;i++){heart(W/2+Math.sin(frame/20+i*2)*50,270-((frame*0.6+i*45)%190),0.8,0.9)}
+  }
+  x.fillStyle='rgba(0,0,0,.5)';x.fillRect(30,470,340,110);
+  x.globalAlpha=Math.min(1,sceneT/30);x.textAlign='center';x.fillStyle='#fff';
+  const last=scene===LINES.length-1;
+  x.font=(last?'bold 22px':'17px')+' "Trebuchet MS",sans-serif';
+  if(last)x.fillStyle='#ffd24a';
+  wrap(LINES[scene],W/2,505,310,24);x.globalAlpha=1;
+  if(sceneT>40){x.font='13px "Trebuchet MS",sans-serif';x.fillStyle='#ddd';x.fillText(last?'Chạm để bay tiếp':'Chạm để tiếp tục',W/2,568)}
+}
+function drawBad(){
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#141a26');g.addColorStop(1,'#3a4256');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.strokeStyle='rgba(180,200,230,.45)';x.lineWidth=1.5;
+  for(let i=0;i<45;i++){const rx=(i*53)%W,ry=(frame*9+i*97)%H;x.beginPath();x.moveTo(rx,ry);x.lineTo(rx-3,ry+14);x.stroke()}
+  x.fillStyle='#0d1119';x.fillRect(0,440,W,30);
+  const pa=scene===2?Math.max(0,0.6-sceneT/100):0;
+  if(pa>0){x.globalAlpha=pa;cbird(300,130+Math.sin(frame/20)*5,0.8,0,'#ff9fb8');x.globalAlpha=1}
+  cbird(W/2-20,300+Math.sin(frame/25)*5,1.1,0.5,'#c9b84a');
+  if(scene>=3){x.fillStyle='#ff9fb8';x.beginPath();x.ellipse(W/2+60+Math.sin(frame/15)*20,80+(frame*0.8)%300,3,12,0.6,0,7);x.fill()}
+  x.fillStyle='rgba(0,0,0,.5)';x.fillRect(30,470,340,110);
+  x.globalAlpha=Math.min(1,sceneT/30);x.textAlign='center';x.fillStyle='#fff';
+  const last=scene===LINES.length-1;
+  x.font=(last?'bold 22px':'17px')+' "Trebuchet MS",sans-serif';
+  if(last)x.fillStyle='#ff6b6b';
+  wrap(LINES[scene],W/2,505,310,24);x.globalAlpha=1;
+  if(sceneT>40){x.font='13px "Trebuchet MS",sans-serif';x.fillStyle='#ddd';x.fillText(last?'Chạm để thử lại':'Chạm để tiếp tục',W/2,568)}
+}
+function drawEnding(){
+  if(state!=='ending')return;
+  if(endId===-1){drawBad();return}
+  if(endId===15){drawLove();return}
+  const k=Math.min(1,(scene+sceneT/120)/4);
+  x.fillStyle='#0f1b3d';x.fillRect(0,0,W,H);
+  x.globalAlpha=k;
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#ffcf7a');g.addColorStop(1,'#ff9a5c');
+  x.fillStyle=g;x.fillRect(0,0,W,H);x.globalAlpha=1;
+  x.fillStyle='#fff';x.globalAlpha=1-k;
+  for(let i=0;i<30;i++){x.fillRect((i*137)%W,(i*71)%380,2,2)}
+  x.globalAlpha=1;
+  x.fillStyle='rgba(255,255,255,.85)';
+  [[60,420],[170,440],[290,415],[380,445]].forEach(([a,b])=>{x.beginPath();x.arc(a,b,40,0,7);x.arc(a+35,b+10,30,0,7);x.fill()});
+  if(scene>=1){
+    const r=x.createRadialGradient(W/2,150,5,W/2,150,90);
+    r.addColorStop(0,'rgba(255,240,170,.95)');r.addColorStop(1,'rgba(255,240,170,0)');
+    x.fillStyle=r;x.fillRect(W/2-100,50,200,200);
+    x.fillStyle='#8b5a2b';x.strokeStyle='#4a2f12';x.lineWidth=3;
+    x.beginPath();x.ellipse(W/2,165,38,14,0,0,7);x.fill();x.stroke();
+  }
+  if(scene>=2)mini(W/2,148+Math.sin(frame/12)*3,0.75,0,2);
+  let by=330+Math.sin(frame/14)*8,bx=W/2-70;
+  if(scene>=3){const p=Math.min(1,sceneT/90);by=330-p*170;bx=W/2-70+p*50}
+  mini(bx,by,1.1,scene>=3?-0.3:0,3);
+  x.fillStyle='rgba(0,0,0,.5)';x.fillRect(30,470,340,110);
+  x.globalAlpha=Math.min(1,sceneT/30);
+  x.textAlign='center';x.fillStyle='#fff';
+  const last=scene===LINES.length-1;
+  x.font=(last?'bold 22px':'17px')+' "Trebuchet MS",sans-serif';
+  if(last)x.fillStyle='#ffd24a';
+  wrap(LINES[scene],W/2,505,310,24);
+  x.globalAlpha=1;
+  if(sceneT>40){x.font='13px "Trebuchet MS",sans-serif';x.fillStyle='#ddd';x.fillText(last?'Chạm để chơi lại':'Chạm để tiếp tục',W/2,568)}
+}
+function loop(){update();draw();drawEnding();requestAnimationFrame(loop)}
+reset();loop();
+</script>
+</body>
+</html>
